@@ -47,20 +47,35 @@ async function main() {
   const byTerritory = {};
   for (const r of reps) {
     byTerritory[r.territory] ??= [];
-    byTerritory[r.territory].push({ email: r.rep_email, capacity: Number(r.capacity), load: 0 });
+    const capacity = Number(r.capacity);
+    // A blank/zero/non-numeric capacity must not produce NaN in the sort
+    // comparator below (implementation-defined ordering) — treat it as zero
+    // capacity, i.e. this rep gets nothing until their config is fixed.
+    byTerritory[r.territory].push({ email: r.rep_email, capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 0, load: 0 });
   }
 
+  // Hard cap: once a rep is at capacity, stop assigning them accounts.
+  // If every rep in a territory is full, the account stays with its current
+  // owner and is flagged — it does NOT get force-assigned past anyone's
+  // stated capacity just because their ratio is momentarily lowest.
   const result = accounts.map((acc) => {
-    const pool = byTerritory[acc.territory];
-    if (!pool || !pool.length) return { ...acc, new_owner: acc.current_owner, reason: "no_reps_in_territory" };
-    pool.sort((a, b) => a.load / a.capacity - b.load / b.capacity);
-    const chosen = pool[0];
+    const territoryPool = byTerritory[acc.territory] || [];
+    const available = territoryPool.filter((r) => r.load < r.capacity);
+    if (!available.length) {
+      return {
+        ...acc,
+        new_owner: acc.current_owner,
+        reason: territoryPool.length ? "no_capacity_available" : "no_reps_in_territory",
+      };
+    }
+    available.sort((a, b) => a.load / a.capacity - b.load / b.capacity);
+    const chosen = available[0];
     chosen.load++;
     return { ...acc, new_owner: chosen.email, reason: chosen.email === acc.current_owner ? "unchanged" : "rebalanced" };
   });
 
   await writeFile("rebalanced-assignments.csv", toCsv(["id", "name", "current_owner", "territory", "new_owner", "reason"], result), "utf8");
-  console.log(`Proposed reassignment for ${result.filter((r) => r.reason === "rebalanced").length} of ${accounts.length} accounts.`);
+  console.log(`Proposed reassignment for ${result.filter((r) => r.reason === "rebalanced").length} of ${accounts.length} accounts (${result.filter((r) => r.reason === "no_capacity_available").length} left unassigned — territory at full capacity).`);
   console.log("Wrote rebalanced-assignments.csv — review before applying to your CRM.");
 }
 

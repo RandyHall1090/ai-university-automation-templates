@@ -47,6 +47,10 @@ function daysSince(dateStr) {
   return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+function normOutcome(o) {
+  return (o || "").trim().toLowerCase();
+}
+
 async function main() {
   const { input, stalledDays } = parseArgs(process.argv);
   const text = await readFile(input, "utf8");
@@ -58,9 +62,12 @@ async function main() {
     process.exit(1);
   }
 
-  const open = rows.filter((r) => !r.outcome);
-  const closed = rows.filter((r) => r.outcome === "won" || r.outcome === "lost");
-  const won = closed.filter((r) => r.outcome === "won");
+  // Case-insensitive outcome matching — a CRM export reading "Won"/"Closed Won"
+  // must not be excluded from BOTH the open and closed buckets.
+  const open = rows.filter((r) => !normOutcome(r.outcome));
+  const closed = rows.filter((r) => ["won", "lost"].includes(normOutcome(r.outcome)));
+  const won = closed.filter((r) => normOutcome(r.outcome) === "won");
+  const unclassified = rows.length - open.length - closed.length;
 
   const byStage = {};
   for (const r of open) {
@@ -94,6 +101,7 @@ async function main() {
     "## Win Rate",
     "",
     winRate === null ? "No closed deals in this export." : `${winRate.toFixed(1)}% (${won.length} won / ${closed.length} closed)`,
+    unclassified ? `\n${unclassified} deal(s) had an outcome value other than blank/"won"/"lost" and were excluded from both buckets — check for a typo or unexpected status.` : "",
   ].join("\n");
 
   const json = {
@@ -103,12 +111,13 @@ async function main() {
     win_rate_pct: winRate,
     closed_count: closed.length,
     won_count: won.length,
+    unclassified_count: unclassified,
   };
 
   await writeFile("pipeline-report.md", md + "\n", "utf8");
   await writeFile("pipeline-report.json", JSON.stringify(json, null, 2), "utf8");
 
-  console.log(`Analyzed ${rows.length} deals (${open.length} open, ${closed.length} closed).`);
+  console.log(`Analyzed ${rows.length} deals (${open.length} open, ${closed.length} closed, ${unclassified} unclassified).`);
   console.log("Wrote pipeline-report.md and pipeline-report.json");
 }
 

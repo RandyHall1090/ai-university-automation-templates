@@ -15,19 +15,31 @@ const DATE_RE = /\b(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}|(January|Februar
 async function main() {
   const path = process.argv[2];
   if (!path) {
-    console.error("Usage: node summarize-transcript.mjs <call-transcript.txt>");
+    console.error("Usage: node summarize-transcript.mjs <call-transcript.txt> [--speaker-label=Rep]");
     process.exit(1);
   }
+  const labelFlag = process.argv.find((a) => a.startsWith("--speaker-label="));
+  const speakerLabel = (labelFlag ? labelFlag.split("=")[1] : "Rep").toLowerCase();
 
   const text = await readFile(path, "utf8");
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
 
   const actionItems = [];
   const datesFound = new Set();
+  let sawSpeakerLabels = false;
 
   for (const line of lines) {
+    // If the transcript uses "Speaker: text" lines, only capture commitments
+    // from --speaker-label (default "Rep") — otherwise a prospect saying
+    // "I'll think about it" gets misattributed as YOUR action item. If no
+    // speaker labels appear anywhere, fall back to scanning every line.
+    const speakerMatch = line.match(/^([^:]{1,40}):\s*(.*)$/);
+    const speaker = speakerMatch ? speakerMatch[1].trim().toLowerCase() : null;
+    if (speaker) sawSpeakerLabels = true;
+    const isOwnLine = !sawSpeakerLabels || speaker === speakerLabel;
+
     const lower = line.toLowerCase();
-    if (COMMITMENT_PHRASES.some((p) => lower.includes(p))) {
+    if (isOwnLine && COMMITMENT_PHRASES.some((p) => lower.includes(p))) {
       actionItems.push(line.trim());
     }
     const matches = line.match(DATE_RE);
@@ -49,7 +61,7 @@ async function main() {
     actionItems.length ? actionItems.map((a) => `- ${a}`).join("\n") : "- None detected — review transcript manually.",
     "",
     "**Dates Mentioned:**",
-    datesFound.size ? Array.from(datesFound).map((d) => `- ${d}`).join("\n") : "- None detected.",
+    datesFound.size ? Array.from(datesFound).map((d) => `- ${d}`).join("\n") : "- None detected. Note: dates without a year (e.g. \"August 3\") are extracted as-is — confirm the intended year yourself.",
     "",
     "**Sentiment:** _human review needed — not auto-assessed_",
   ].join("\n");

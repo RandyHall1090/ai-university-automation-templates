@@ -28,8 +28,21 @@ async function main() {
   }
 
   const deal = JSON.parse(await readFile(dealPath, "utf8"));
-  const template = await readFile(join(__dirname, "template.md"), "utf8");
 
+  if (!Array.isArray(deal.line_items) || !deal.line_items.length) {
+    console.error("deal.json must include a non-empty line_items array.");
+    process.exit(1);
+  }
+  // A customer-facing document must never show "$NaN" — refuse to render
+  // rather than silently produce a broken total from a bad input.
+  for (const item of deal.line_items) {
+    if (typeof item.quantity !== "number" || typeof item.unit_price !== "number" || Number.isNaN(item.quantity) || Number.isNaN(item.unit_price)) {
+      console.error(`Line item "${item.description ?? "(no description)"}" has a non-numeric quantity or unit_price — fix deal.json before generating a customer-facing proposal.`);
+      process.exit(1);
+    }
+  }
+
+  const template = await readFile(join(__dirname, "template.md"), "utf8");
   const total = deal.line_items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
 
   const output = template
@@ -37,7 +50,7 @@ async function main() {
     .replace(/{{customer_contact}}/g, deal.customer_contact ?? "")
     .replace(/{{prepared_by}}/g, deal.prepared_by ?? "")
     .replace(/{{valid_until}}/g, deal.valid_until ?? "")
-    .replace(/{{line_items_table}}/g, lineItemsTable(deal.line_items ?? []))
+    .replace(/{{line_items_table}}/g, lineItemsTable(deal.line_items))
     .replace(/{{total}}/g, formatCurrency(total))
     .replace(/{{payment_terms}}/g, deal.payment_terms ?? "")
     .replace(/{{notes}}/g, deal.notes ?? "");

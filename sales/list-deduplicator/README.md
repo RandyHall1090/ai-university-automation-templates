@@ -6,7 +6,11 @@ Merges multiple prospect-list exports and removes duplicates by email/domain bef
 
 ## What it does
 
-Reads any number of CSV files (each with at least an `email` column) passed as arguments, merges them, dedupes by lowercased email (keeping the first occurrence), and flags rows sharing the same domain for a quick eyeball on account overlap. Outputs `deduped-list.csv` and `domain-overlap.csv`.
+Reads any number of CSV files (each with at least an `email` column) passed as arguments, merges them, dedupes by lowercased email (keeping the first occurrence), and counts contacts per domain. Outputs:
+
+- `deduped-list.csv` — one row per unique email.
+- `skipped-no-email.csv` — rows with no email at all, so nobody silently disappears from your data without a trace. Only written if at least one row was skipped.
+- `domain-overlap.csv` — `domain,count` for every domain that appears on 2+ unique contacts across the merged input. This is a count only — to see which specific contacts share a domain, filter `deduped-list.csv` by domain yourself.
 
 ## Adapt to your stack
 

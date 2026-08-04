@@ -44,6 +44,7 @@ async function main() {
 
   const seen = new Map();
   const domainCounts = new Map();
+  const skippedRows = [];
   let allHeaders = [];
 
   for (const path of paths) {
@@ -52,7 +53,8 @@ async function main() {
     for (const h of headers) if (!allHeaders.includes(h)) allHeaders.push(h);
     for (const row of rows) {
       const email = (row.email || "").toLowerCase();
-      if (!email || seen.has(email)) continue;
+      if (!email) { skippedRows.push(row); continue; }
+      if (seen.has(email)) continue;
       seen.set(email, row);
       const domain = email.split("@")[1] || "";
       domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
@@ -62,11 +64,15 @@ async function main() {
   const dedupedRows = Array.from(seen.values());
   await writeFile("deduped-list.csv", toCsv(allHeaders, dedupedRows), "utf8");
 
+  if (skippedRows.length) {
+    await writeFile("skipped-no-email.csv", toCsv(allHeaders, skippedRows), "utf8");
+  }
+
   const overlap = Array.from(domainCounts.entries()).filter(([, c]) => c > 1).map(([domain, count]) => ({ domain, count }));
   await writeFile("domain-overlap.csv", toCsv(["domain", "count"], overlap), "utf8");
 
-  console.log(`Merged ${paths.length} files — ${dedupedRows.length} unique contacts, ${overlap.length} domains with multiple contacts.`);
-  console.log("Wrote deduped-list.csv and domain-overlap.csv");
+  console.log(`Merged ${paths.length} files — ${dedupedRows.length} unique contacts, ${skippedRows.length} row(s) skipped (no email), ${overlap.length} domains with multiple contacts.`);
+  console.log(skippedRows.length ? "Wrote deduped-list.csv, skipped-no-email.csv, and domain-overlap.csv" : "Wrote deduped-list.csv and domain-overlap.csv");
 }
 
 main().catch((e) => { console.error(e.message); process.exit(1); });

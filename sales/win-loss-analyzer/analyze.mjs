@@ -25,6 +25,10 @@ function parseCsv(text) {
   });
 }
 
+function normOutcome(o) {
+  return (o || "").trim().toLowerCase();
+}
+
 async function main() {
   const path = process.argv[2];
   if (!path) {
@@ -32,8 +36,8 @@ async function main() {
     process.exit(1);
   }
   const deals = parseCsv(await readFile(path, "utf8"));
-  const lost = deals.filter((d) => d.outcome === "lost");
-  const won = deals.filter((d) => d.outcome === "won");
+  const lost = deals.filter((d) => normOutcome(d.outcome) === "lost");
+  const won = deals.filter((d) => normOutcome(d.outcome) === "won");
 
   const lossReasons = {};
   for (const d of lost) lossReasons[d.loss_reason || "(unspecified)"] = (lossReasons[d.loss_reason || "(unspecified)"] || 0) + 1;
@@ -42,8 +46,9 @@ async function main() {
   for (const d of deals) {
     const seg = d.segment || "(none)";
     bySegment[seg] ??= { won: 0, lost: 0 };
-    if (d.outcome === "won") bySegment[seg].won++;
-    if (d.outcome === "lost") bySegment[seg].lost++;
+    const o = normOutcome(d.outcome);
+    if (o === "won") bySegment[seg].won++;
+    if (o === "lost") bySegment[seg].lost++;
   }
 
   const avgWonSize = won.length ? won.reduce((s, d) => s + (Number(d.amount) || 0), 0) / won.length : 0;
@@ -57,7 +62,12 @@ async function main() {
     ...Object.entries(lossReasons).sort((a, b) => b[1] - a[1]).map(([r, c]) => `- ${r}: ${c}`), "",
     "## Win Rate by Segment", "",
     "| Segment | Won | Lost | Win Rate |", "|---|---|---|---|",
-    ...Object.entries(bySegment).map(([seg, s]) => `| ${seg} | ${s.won} | ${s.lost} | ${((s.won / (s.won + s.lost)) * 100 || 0).toFixed(1)}% |`),
+    // A segment with no won/lost deals reports "n/a", not a misleading "0.0%".
+    ...Object.entries(bySegment).map(([seg, s]) => {
+      const total = s.won + s.lost;
+      const rate = total ? `${((s.won / total) * 100).toFixed(1)}%` : "n/a";
+      return `| ${seg} | ${s.won} | ${s.lost} | ${rate} |`;
+    }),
   ].join("\n");
 
   await writeFile("win-loss-report.md", md + "\n", "utf8");

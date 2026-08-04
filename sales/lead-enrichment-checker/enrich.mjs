@@ -37,6 +37,13 @@ function toCsv(headers, rows) {
   return lines.join("\n") + "\n";
 }
 
+// Normalizes a domain for matching: trims, lowercases, and strips a leading
+// "www." so "Acme.com", "acme.com", and "www.acme.com" all match the same
+// enrichment-source row instead of silently missing each other.
+function normDomain(d) {
+  return String(d ?? "").trim().toLowerCase().replace(/^www\./, "");
+}
+
 async function main() {
   const [, , leadsPath, sourcePath] = process.argv;
   if (!leadsPath) {
@@ -45,10 +52,10 @@ async function main() {
   }
   const leads = parseCsv(await readFile(leadsPath, "utf8"));
   const source = sourcePath ? parseCsv(await readFile(sourcePath, "utf8")) : [];
-  const byDomain = new Map(source.map((s) => [s.domain, s]));
+  const byDomain = new Map(source.map((s) => [normDomain(s.domain), s]));
 
   const enriched = leads.map((lead) => {
-    const match = byDomain.get(lead.domain);
+    const match = byDomain.get(normDomain(lead.domain));
     const filled = { ...lead };
     if (match) for (const f of FIELDS) if (!filled[f] && match[f]) filled[f] = match[f];
     return filled;

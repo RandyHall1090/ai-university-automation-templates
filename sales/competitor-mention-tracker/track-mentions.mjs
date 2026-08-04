@@ -35,6 +35,10 @@ function toCsv(headers, rows) {
   return lines.join("\n") + "\n";
 }
 
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 async function main() {
   const [, , notesPath, compPath] = process.argv;
   if (!notesPath || !compPath) {
@@ -49,7 +53,11 @@ async function main() {
   for (const n of notes) {
     const text = (n.note_text || "").toLowerCase();
     for (const c of competitors) {
-      const count = text.split(c.toLowerCase()).length - 1;
+      // Word-boundary matching — a plain substring count inflates totals
+      // ("Box" matches "boxes"/"inbox"/"sandbox"; "SAP" matches "sapphire").
+      const re = new RegExp(`\\b${escapeRegex(c.toLowerCase())}\\b`, "g");
+      const matches = text.match(re);
+      const count = matches ? matches.length : 0;
       if (count > 0) {
         mentions.push({ deal_id: n.deal_id, competitor: c, mentions: count });
         totals[c] = (totals[c] || 0) + count;
