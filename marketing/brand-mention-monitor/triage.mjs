@@ -5,19 +5,35 @@ const URGENT_WORDS = ["refund", "cancel", "lawsuit", "scam", "terrible", "worst"
 const POSITIVE_WORDS = ["love", "amazing", "great", "awesome", "best", "recommend"];
 
 function parseCsv(text) {
-  const lines = text.trim().split(/\r?\n/);
-  const headers = lines[0].split(",").map((h) => h.trim());
-  return lines.slice(1).map((line) => {
-    const cells = line.split(",");
-    const row = {};
-    headers.forEach((h, i) => (row[h] = (cells[i] ?? "").trim()));
-    return row;
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  const s = text.replace(/\r\n/g, "\n");
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else field += c;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  const clean = rows.filter((r) => !(r.length === 1 && r[0] === ""));
+  const headers = clean[0].map((h) => h.trim());
+  return clean.slice(1).map((cells) => {
+    const obj = {};
+    headers.forEach((h, i) => (obj[h] = (cells[i] ?? "").trim()));
+    return obj;
   });
 }
 
 function toCsv(headers, rows) {
-  const escape = (v) => (String(v ?? "").includes(",") ? `"${v}"` : v ?? "");
-  const lines = [headers.join(",")];
+  const escape = (v) => {
+    const str = String(v ?? "");
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+  const lines = [headers.map(escape).join(",")];
   for (const row of rows) lines.push(headers.map((h) => escape(row[h])).join(","));
   return lines.join("\n") + "\n";
 }
