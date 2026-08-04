@@ -1,0 +1,10 @@
+{
+  "period": "July 2026",
+  "revenue": 182500,
+  "expenses": 141200,
+  "net_income": 41300,
+  "cash_balance": 620000,
+  "headcount": 14,
+  "highlights": "Closed 6 new accounts. Renewed 2 enterprise contracts. No overdue AR beyond 60 days.",
+  "risks": "One customer (12% of MRR) is 45 days past due on invoice #1042."
+}

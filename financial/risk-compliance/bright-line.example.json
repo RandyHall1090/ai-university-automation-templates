@@ -1,0 +1,6 @@
+{
+  "large_transaction_threshold": 10000,
+  "round_dollar_threshold": 1000,
+  "flag_weekend_transactions": true,
+  "new_vendor_threshold": 5000
+}

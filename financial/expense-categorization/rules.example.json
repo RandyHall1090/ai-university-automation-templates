@@ -1,0 +1,9 @@
+{
+  "rules": [
+    { "keyword": "aws", "category": "Cloud Hosting" },
+    { "keyword": "github", "category": "Software" },
+    { "keyword": "delta", "category": "Travel" },
+    { "keyword": "office depot", "category": "Office Supplies" },
+    { "keyword": "payroll", "category": "Payroll" }
+  ]
+}
