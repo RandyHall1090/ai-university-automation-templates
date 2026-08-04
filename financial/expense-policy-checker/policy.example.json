@@ -1,0 +1,5 @@
+{
+  "category_limits": { "meals": 75, "travel": 2000, "entertainment": 150 },
+  "receipt_required_above": 25,
+  "disallowed_categories": ["alcohol", "personal"]
+}
