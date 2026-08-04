@@ -1,12 +1,12 @@
 # KPI Dashboard (Marketing)
 
-Rolls up a Google Analytics export and a CRM export into the marketing metrics that actually matter: CAC, MQL→SQL conversion rate, and spend efficiency.
+Rolls up a Google Analytics export and a CRM export into the marketing metrics that actually matter: CAC and MQL→SQL progression.
 
-> **This is a starting point, not a supported product.** Read every line before you run it, adapt it to your own stack, and test in a non-production environment first. Once you customize and run it, you own and operate it. See the [repo README](../../README.md) for the full disclaimer.
+> **This is a starting point, not a supported product.** Read every line before you run it, adapt it to your own stack, and test in a non-production environment first. See the [repo README](../../README.md) for the full disclaimer.
 
 ## What it does
 
-Reads `ga_export.csv` (`date,sessions,spend`) and `crm_export.csv` (`id,stage,created_date`, where `stage` includes values like `MQL`, `SQL`, `customer`). Computes total spend, new customers in the period, CAC (spend ÷ new customers), and MQL→SQL conversion rate. Outputs `kpi-report.md` and `kpi-report.json`.
+Reads `ga_export.csv` (`date,sessions,spend`) and `crm_export.csv` (`id,stage,created_date`, where `stage` includes values like `MQL`, `SQL`, `customer` — matching is case-insensitive). Computes total spend, new customers in the period, CAC (spend ÷ new customers), and an MQL→SQL+ progression rate (leads currently at SQL or customer ÷ leads currently at MQL). **This is a current-stage snapshot, not a true cohort conversion rate** — your CRM export shows where each lead is *right now*, not its full history, so this can't perfectly reconstruct "of the MQLs from three months ago, how many converted." For that, you'd need stage-history data (a timestamped stage-change log), not a point-in-time export.
 
 ## Adapt to your stack
 

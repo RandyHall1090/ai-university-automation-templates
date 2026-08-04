@@ -51,7 +51,15 @@ async function main() {
     conversions: Number(r.conversions),
   }));
 
-  const withRate = rows
+  // A variant with zero/negative visitors, or more conversions than
+  // visitors, must not corrupt the ranking sort with a NaN rate.
+  const invalid = rows.filter((r) => !Number.isFinite(r.visitors) || r.visitors <= 0 || !Number.isFinite(r.conversions) || r.conversions < 0 || r.conversions > r.visitors);
+  const valid = rows.filter((r) => !invalid.includes(r));
+  if (invalid.length) {
+    console.log(`Skipped ${invalid.length} variant(s) with invalid visitor/conversion counts.`);
+  }
+
+  const withRate = valid
     .map((r) => ({ ...r, rate: r.conversions / r.visitors }))
     .sort((a, b) => b.rate - a.rate);
 
@@ -61,8 +69,12 @@ async function main() {
   }
 
   if (withRate.length < 2) {
-    console.log("\nNeed at least 2 variants to run a significance test.");
+    console.log("\nNeed at least 2 valid variants to run a significance test.");
     return;
+  }
+
+  if (withRate.length > 2) {
+    console.log(`\nNote: comparing only the top two of ${withRate.length} variants at 95% confidence. With 3+ variants, testing multiple pairs raises the chance of a false winner by chance alone — treat this as directional, not conclusive, until you've reduced to a head-to-head test.`);
   }
 
   const [top, second] = withRate;

@@ -2,6 +2,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ALREADY_ACTIONED_STATUSES = ["unsubscribed", "complained", "bounced"];
 
 function parseCsv(text) {
   const rows = [];
@@ -28,12 +29,8 @@ function parseCsv(text) {
 }
 
 function toCsv(headers, rows) {
-  const escape = (v) => {
-    const str = String(v ?? "");
-    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-  };
-  const lines = [headers.map(escape).join(",")];
-  for (const row of rows) lines.push(headers.map((h) => escape(row[h])).join(","));
+  const lines = [headers.join(",")];
+  for (const row of rows) lines.push(headers.map((h) => row[h] ?? "").join(","));
   return lines.join("\n") + "\n";
 }
 
@@ -56,11 +53,21 @@ async function main() {
 
   const subs = parseCsv(await readFile(input, "utf8"));
   const flagged = subs.map((s) => {
+    const status = (s.status || "").trim().toLowerCase();
+    // Already-unsubscribed/complained/bounced contacts have already been
+    // actioned by the ESP — don't re-flag them as if there's something
+    // left for a human to do.
+    if (ALREADY_ACTIONED_STATUSES.includes(status)) return { ...s, flags: "" };
+
     const flags = [];
     if (!EMAIL_RE.test(s.email)) flags.push("malformed_email");
     if ((Number(s.bounce_count) || 0) >= bounceThreshold) flags.push("high_bounce_count");
     const age = daysSince(s.last_open_date);
-    if (age !== null && age > inactiveDays) flags.push(`inactive_${age}d`);
+    // A subscriber who has NEVER opened anything (blank/invalid
+    // last_open_date) is the highest-priority hygiene target — flag them,
+    // don't silently skip them.
+    if (age === null) flags.push("never_opened_or_invalid_date");
+    else if (age > inactiveDays) flags.push(`inactive_${age}d`);
     return { ...s, flags: flags.join("|") };
   }).filter((s) => s.flags);
 

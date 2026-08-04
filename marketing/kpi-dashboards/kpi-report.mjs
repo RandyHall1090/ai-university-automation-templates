@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// KPI Dashboard (Marketing) — CAC and MQL→SQL conversion from a GA export
+// KPI Dashboard (Marketing) — CAC and MQL→SQL progression from a GA export
 // and a CRM stage export. See README.md before running.
 
 import { readFile, writeFile } from "node:fs/promises";
@@ -28,6 +28,10 @@ function parseCsv(text) {
   });
 }
 
+function normStage(s) {
+  return (s || "").trim().toLowerCase();
+}
+
 async function main() {
   const [, , gaPath, crmPath] = process.argv;
   if (!gaPath || !crmPath) {
@@ -41,12 +45,19 @@ async function main() {
   const totalSpend = ga.reduce((sum, r) => sum + (Number(r.spend) || 0), 0);
   const totalSessions = ga.reduce((sum, r) => sum + (Number(r.sessions) || 0), 0);
 
-  const mqlCount = crm.filter((r) => r.stage === "MQL").length;
-  const sqlCount = crm.filter((r) => r.stage === "SQL").length;
-  const customerCount = crm.filter((r) => r.stage === "customer").length;
+  const mqlCount = crm.filter((r) => normStage(r.stage) === "mql").length;
+  const sqlCount = crm.filter((r) => normStage(r.stage) === "sql").length;
+  const customerCount = crm.filter((r) => normStage(r.stage) === "customer").length;
+  // "stage" is a CURRENT-stage snapshot, not a history — a lead that has
+  // already progressed past SQL to customer would otherwise be invisible
+  // to a strict MQL-count / SQL-count ratio. Counting SQL + customer as
+  // "progressed past MQL" is a closer approximation, though still not a
+  // true cohort conversion rate (that needs stage-history data this export
+  // doesn't have).
+  const progressedPastMql = sqlCount + customerCount;
 
   const cac = customerCount ? totalSpend / customerCount : null;
-  const mqlToSql = mqlCount ? (sqlCount / mqlCount) * 100 : null;
+  const mqlToSql = mqlCount ? (progressedPastMql / mqlCount) * 100 : null;
 
   const md = [
     "# Marketing KPI Report",
@@ -55,10 +66,10 @@ async function main() {
     `- **Total sessions:** ${totalSessions.toLocaleString()}`,
     `- **New customers:** ${customerCount}`,
     `- **CAC:** ${cac === null ? "n/a (no customers in period)" : "$" + cac.toFixed(2)}`,
-    `- **MQL → SQL conversion:** ${mqlToSql === null ? "n/a (no MQLs in period)" : mqlToSql.toFixed(1) + "%"} (${sqlCount} SQL / ${mqlCount} MQL)`,
+    `- **MQL → SQL+ progression:** ${mqlToSql === null ? "n/a (no MQLs in period)" : mqlToSql.toFixed(1) + "%"} (${progressedPastMql} at SQL or beyond / ${mqlCount} MQL) — a current-stage snapshot, not a true cohort conversion rate.`,
   ].join("\n");
 
-  const json = { total_spend: totalSpend, total_sessions: totalSessions, customer_count: customerCount, cac, mql_count: mqlCount, sql_count: sqlCount, mql_to_sql_pct: mqlToSql };
+  const json = { total_spend: totalSpend, total_sessions: totalSessions, customer_count: customerCount, cac, mql_count: mqlCount, sql_count: sqlCount, progressed_past_mql: progressedPastMql, mql_to_sql_plus_pct: mqlToSql };
 
   await writeFile("kpi-report.md", md + "\n", "utf8");
   await writeFile("kpi-report.json", JSON.stringify(json, null, 2), "utf8");

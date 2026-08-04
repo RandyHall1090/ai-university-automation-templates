@@ -43,6 +43,7 @@ async function main() {
   }
   const urls = parseCsv(await readFile(urlsPath, "utf8"));
   const convention = JSON.parse(await readFile(convPath, "utf8"));
+  const requiredParams = convention.required_params || [];
 
   const violations = [];
   for (const row of urls) {
@@ -54,12 +55,16 @@ async function main() {
       continue;
     }
     const issues = [];
-    for (const req of convention.required_params) {
-      if (!params.has(req)) issues.push(`missing_${req}`);
+    for (const req of requiredParams) {
+      const val = params.get(req);
+      // An EMPTY value (?utm_source=) must count as missing — params.has()
+      // alone would call it present.
+      if (!params.has(req) || val === "") issues.push(`missing_${req}`);
     }
     for (const [param, allowed] of Object.entries(convention.allowed_values || {})) {
       const val = params.get(param);
-      if (val && !allowed.includes(val)) issues.push(`invalid_${param}:${val}`);
+      if (val === "") issues.push(`empty_${param}`);
+      else if (val && !allowed.includes(val)) issues.push(`invalid_${param}:${val}`);
     }
     if (issues.length) violations.push({ url: row.url, issue: issues.join("|") });
   }

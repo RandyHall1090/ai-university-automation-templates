@@ -51,9 +51,13 @@ async function main() {
     process.exit(1);
   }
   const rows = parseCsv(await readFile(input, "utf8"));
-  const out = rows.map((r) => ({ page: r.page, ...variants(r.value_prop, r.audience) }));
+  // A blank value_prop must not abort the entire run — skip that row and
+  // keep going, since the other rows are still usable.
+  const usable = rows.filter((r) => r.value_prop && r.value_prop.trim());
+  const skipped = rows.length - usable.length;
+  const out = usable.map((r) => ({ page: r.page, ...variants(r.value_prop, r.audience || "your audience") }));
   await writeFile("headline-variants.csv", toCsv(["page", "benefit_led", "question_led", "number_led", "urgency_led"], out), "utf8");
-  console.log(`Generated variants for ${rows.length} pages.`);
+  console.log(`Generated variants for ${usable.length} pages${skipped ? ` (${skipped} row(s) skipped — missing value_prop)` : ""}.`);
   console.log("Wrote headline-variants.csv");
 }
 

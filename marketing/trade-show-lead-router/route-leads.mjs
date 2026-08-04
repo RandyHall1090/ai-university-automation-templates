@@ -26,13 +26,19 @@ function parseCsv(text) {
 }
 
 function toCsv(headers, rows) {
-  const escape = (v) => {
-    const str = String(v ?? "");
-    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-  };
-  const lines = [headers.map(escape).join(",")];
-  for (const row of rows) lines.push(headers.map((h) => escape(row[h])).join(","));
+  const lines = [headers.join(",")];
+  for (const row of rows) lines.push(headers.map((h) => row[h] ?? "").join(","));
   return lines.join("\n") + "\n";
+}
+
+// A plain object literal lookup (`map[key]`) walks the prototype chain, so
+// a key like "constructor" or "toString" resolves to a built-in function
+// instead of undefined. Object.create(null) has no prototype, so lookups
+// are genuinely safe.
+function buildSafeMap(entries) {
+  const map = Object.create(null);
+  for (const [k, v] of Object.entries(entries || {})) map[String(k).trim().toLowerCase()] = v;
+  return map;
 }
 
 async function main() {
@@ -43,11 +49,15 @@ async function main() {
   }
   const leads = parseCsv(await readFile(leadsPath, "utf8"));
   const { territory_map, interest_map } = JSON.parse(await readFile(rulesPath, "utf8"));
+  const territoryMap = buildSafeMap(territory_map);
+  const interestMap = buildSafeMap(interest_map);
 
-  const routed = leads.map((l) => ({
-    ...l,
-    assigned_rep: interest_map[l.interest_tag] || territory_map[l.territory] || "unassigned",
-  }));
+  const routed = leads.map((l) => {
+    const interestKey = (l.interest_tag || "").trim().toLowerCase();
+    const territoryKey = (l.territory || "").trim().toLowerCase();
+    const assigned = interestMap[interestKey] ?? territoryMap[territoryKey] ?? "unassigned";
+    return { ...l, assigned_rep: assigned };
+  });
 
   await writeFile("routed-leads.csv", toCsv([...Object.keys(leads[0] ?? {}), "assigned_rep"], routed), "utf8");
   console.log(`Routed ${routed.length} leads (${routed.filter((r) => r.assigned_rep === "unassigned").length} unassigned).`);

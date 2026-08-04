@@ -55,18 +55,23 @@ function parseArgs(argv) {
   }
   const weeksFlag = argv.find((a) => a.startsWith("--weeks="));
   const ppwFlag = argv.find((a) => a.startsWith("--posts-per-week="));
-  return {
-    input,
-    weeks: weeksFlag ? Number(weeksFlag.split("=")[1]) : 4,
-    postsPerWeek: ppwFlag ? Number(ppwFlag.split("=")[1]) : 3,
-  };
+  const weeks = weeksFlag ? Number(weeksFlag.split("=")[1]) : 4;
+  const postsPerWeek = ppwFlag ? Number(ppwFlag.split("=")[1]) : 3;
+  if (!Number.isFinite(weeks) || weeks <= 0 || !Number.isFinite(postsPerWeek) || postsPerWeek <= 0) {
+    console.error("--weeks and --posts-per-week must be positive numbers.");
+    process.exit(1);
+  }
+  return { input, weeks, postsPerWeek };
 }
 
 async function main() {
   const { input, weeks, postsPerWeek } = parseArgs(process.argv);
-  const topics = parseCsv(await readFile(input, "utf8"));
+  const allTopics = parseCsv(await readFile(input, "utf8"));
+  // A row with no topic text can't generate a meaningful caption — skip it
+  // rather than write "undefined" into every variant.
+  const topics = allTopics.filter((t) => t.topic && t.topic.trim());
   if (!topics.length) {
-    console.error("No topics found in input file.");
+    console.error("No usable topics found — every row needs a non-empty 'topic' value.");
     process.exit(1);
   }
 
@@ -91,7 +96,7 @@ async function main() {
   const headers = ["week", "slot_in_week", "topic", "channel", "caption_short", "caption_long", "caption_cta"];
   await writeFile("content-calendar.csv", toCsv(headers, calendar), "utf8");
 
-  console.log(`Generated ${calendar.length} scheduled posts across ${weeks} weeks.`);
+  console.log(`Generated ${calendar.length} scheduled posts across ${weeks} weeks (${allTopics.length - topics.length} row(s) skipped — missing topic).`);
   console.log("Wrote content-calendar.csv");
 }
 

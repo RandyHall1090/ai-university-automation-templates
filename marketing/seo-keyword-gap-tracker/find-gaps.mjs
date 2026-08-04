@@ -35,6 +35,14 @@ function toCsv(headers, rows) {
   return lines.join("\n") + "\n";
 }
 
+// Returns null (not 0) for a blank/invalid position — a blank must not be
+// treated as "ranks #0" in either direction.
+function parsePosition(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+}
+
 async function main() {
   const [, , yoursPath, compPath] = process.argv;
   if (!yoursPath || !compPath) {
@@ -48,10 +56,11 @@ async function main() {
 
   const yours = parseCsv(await readFile(yoursPath, "utf8"));
   const competitor = parseCsv(await readFile(compPath, "utf8"));
-  const yourPositions = new Map(yours.map((r) => [r.keyword.toLowerCase(), Number(r.position)]));
+  const yourPositions = new Map(yours.map((r) => [r.keyword.toLowerCase(), parsePosition(r.position)]));
 
   const gaps = competitor
-    .filter((r) => Number(r.position) <= topN)
+    .map((r) => ({ ...r, _pos: parsePosition(r.position) }))
+    .filter((r) => r._pos !== null && r._pos <= topN)
     .map((r) => ({ ...r, your_position: yourPositions.get(r.keyword.toLowerCase()) ?? null }))
     .filter((r) => r.your_position === null || r.your_position > worseThan)
     .sort((a, b) => (Number(b.search_volume) || 0) - (Number(a.search_volume) || 0));

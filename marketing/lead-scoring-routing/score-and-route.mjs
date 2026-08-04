@@ -58,25 +58,31 @@ async function main() {
   const leads = parseCsv(await readFile(leadsPath, "utf8"));
   const { weights, routing } = JSON.parse(await readFile(weightsPath, "utf8"));
 
+  // Assign round-robin using the ORIGINAL input order, not the score-sorted
+  // order — otherwise rep[0] deterministically gets the highest-scoring
+  // lead on every single run, which isn't what "round-robin" is supposed
+  // to mean. Sorting for display happens AFTER assignment.
   let rrIndex = 0;
-  const scored = leads
-    .map((lead) => ({ ...lead, score: scoreLead(lead, weights) }))
-    .sort((a, b) => b.score - a.score)
-    .map((lead) => {
-      let assignedRep = "";
-      if (routing.mode === "territory") {
-        assignedRep = routing.territory_map[lead.territory] ?? "";
-      } else {
-        assignedRep = routing.reps[rrIndex % routing.reps.length];
-        rrIndex++;
-      }
-      return { ...lead, assigned_rep: assignedRep };
-    });
+  const assigned = leads.map((lead) => {
+    const score = scoreLead(lead, weights);
+    let assignedRep;
+    if (routing.mode === "territory") {
+      assignedRep = routing.territory_map[lead.territory] ?? "unassigned";
+    } else if (!routing.reps || !routing.reps.length) {
+      assignedRep = "unassigned";
+    } else {
+      assignedRep = routing.reps[rrIndex % routing.reps.length];
+      rrIndex++;
+    }
+    return { ...lead, score, assigned_rep: assignedRep };
+  });
+
+  const scored = assigned.sort((a, b) => b.score - a.score);
 
   const headers = [...Object.keys(leads[0] ?? {}), "score", "assigned_rep"];
   await writeFile("scored-leads.csv", toCsv(headers, scored), "utf8");
 
-  console.log(`Scored and routed ${scored.length} leads.`);
+  console.log(`Scored and routed ${scored.length} leads (${scored.filter((l) => l.assigned_rep === "unassigned").length} unassigned).`);
   console.log("Wrote scored-leads.csv");
 }
 
