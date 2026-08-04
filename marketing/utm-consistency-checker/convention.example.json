@@ -1,0 +1,7 @@
+{
+  "required_params": ["utm_source", "utm_medium", "utm_campaign"],
+  "allowed_values": {
+    "utm_source": ["linkedin", "google", "facebook", "newsletter"],
+    "utm_medium": ["cpc", "social", "email", "organic"]
+  }
+}

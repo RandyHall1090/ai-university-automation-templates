@@ -1,0 +1,4 @@
+{
+  "territory_map": { "west": "alex@example.com", "east": "sam@example.com" },
+  "interest_map": { "enterprise": "jordan@example.com" }
+}
