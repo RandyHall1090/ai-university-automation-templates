@@ -1,0 +1,7 @@
+{
+  "tiers": [
+    { "max_discount_pct": 10, "approver": null },
+    { "max_discount_pct": 20, "approver": "sales-manager@example.com" },
+    { "max_discount_pct": 100, "approver": "vp-sales@example.com" }
+  ]
+}
