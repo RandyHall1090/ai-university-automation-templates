@@ -1,0 +1,9 @@
+{
+  "steps": [
+    { "step": 1, "day_offset": 0, "channel": "email", "note": "Initial outreach" },
+    { "step": 2, "day_offset": 3, "channel": "email", "note": "Follow-up #1 — add value/resource" },
+    { "step": 3, "day_offset": 7, "channel": "phone", "note": "Call attempt" },
+    { "step": 4, "day_offset": 12, "channel": "email", "note": "Follow-up #2 — different angle" },
+    { "step": 5, "day_offset": 21, "channel": "email", "note": "Breakup email" }
+  ]
+}

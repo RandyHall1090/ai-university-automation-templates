@@ -1,0 +1,13 @@
+{
+  "deal_id": "1042",
+  "customer_name": "Example Customer, Inc.",
+  "customer_contact": "Jordan Lee",
+  "prepared_by": "Your Name",
+  "valid_until": "2026-09-01",
+  "line_items": [
+    { "description": "Implementation — onboarding & setup", "quantity": 1, "unit_price": 2500 },
+    { "description": "Monthly subscription — Team plan", "quantity": 12, "unit_price": 199 }
+  ],
+  "payment_terms": "Net 30, due upon invoice",
+  "notes": "Pricing valid through the date above. All figures above are entered by the preparer — this file is the source of truth for pricing, not the script."
+}
