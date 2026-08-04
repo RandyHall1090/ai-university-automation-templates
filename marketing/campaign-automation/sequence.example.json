@@ -1,0 +1,8 @@
+{
+  "steps": [
+    { "step": 1, "day_offset": 0, "subject": "Welcome!", "condition": null },
+    { "step": 2, "day_offset": 2, "subject": "Getting started guide", "condition": null },
+    { "step": 3, "day_offset": 5, "subject": "Upgrade to Pro", "condition": "tag!=customer" },
+    { "step": 4, "day_offset": 10, "subject": "Case study", "condition": null }
+  ]
+}

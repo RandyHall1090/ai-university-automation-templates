@@ -1,0 +1,16 @@
+{
+  "weights": {
+    "email_opens": 1,
+    "page_views": 2,
+    "demo_requested": 25,
+    "company_size_over_50": 10
+  },
+  "routing": {
+    "mode": "round_robin",
+    "reps": ["alex@example.com", "sam@example.com", "jordan@example.com"],
+    "territory_map": {
+      "west": "alex@example.com",
+      "east": "sam@example.com"
+    }
+  }
+}
