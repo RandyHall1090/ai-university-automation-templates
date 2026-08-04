@@ -3,14 +3,35 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 function parseCsv(text) {
-  const lines = text.trim().split(/\r?\n/);
-  const headers = lines[0].split(",").map((h) => h.trim());
-  return lines.slice(1).map((line) => {
-    const cells = line.split(",");
-    const row = {};
-    headers.forEach((h, i) => (row[h] = (cells[i] ?? "").trim()));
-    return row;
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  const s = text.replace(/\r\n/g, "\n");
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else field += c;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  const clean = rows.filter((r) => !(r.length === 1 && r[0] === ""));
+  const headers = clean[0].map((h) => h.trim());
+  return clean.slice(1).map((cells) => {
+    const obj = {};
+    headers.forEach((h, i) => (obj[h] = (cells[i] ?? "").trim()));
+    return obj;
   });
+}
+
+// Normalizes an employee_id for matching across two exports: trims
+// whitespace and strips leading zeros so "0042" and "42" are treated as
+// the same employee instead of flagging every real employee as both
+// new and removed just because the two payroll runs formatted IDs differently.
+function normalizeId(id) {
+  return String(id ?? "").trim().replace(/^0+(?=\d)/, "");
 }
 
 async function main() {
@@ -24,16 +45,18 @@ async function main() {
 
   const current = parseCsv(await readFile(currentPath, "utf8"));
   const prior = parseCsv(await readFile(priorPath, "utf8"));
-  const priorById = new Map(prior.map((p) => [p.employee_id, p]));
-  const currentById = new Map(current.map((c) => [c.employee_id, c]));
+  const priorById = new Map(prior.map((p) => [normalizeId(p.employee_id), p]));
+  const currentById = new Map(current.map((c) => [normalizeId(c.employee_id), c]));
 
-  const newEmployees = current.filter((c) => !priorById.has(c.employee_id));
-  const removedEmployees = prior.filter((p) => !currentById.has(p.employee_id));
+  const newEmployees = current.filter((c) => !priorById.has(normalizeId(c.employee_id)));
+  const removedEmployees = prior.filter((p) => !currentById.has(normalizeId(p.employee_id)));
   const payChanges = [];
   for (const c of current) {
-    const p = priorById.get(c.employee_id);
+    const p = priorById.get(normalizeId(c.employee_id));
     if (!p) continue;
-    const changePct = ((Number(c.gross_pay) - Number(p.gross_pay)) / Number(p.gross_pay)) * 100;
+    const priorPay = Number(p.gross_pay);
+    if (!priorPay) continue;
+    const changePct = ((Number(c.gross_pay) - priorPay) / priorPay) * 100;
     if (Math.abs(changePct) > threshold) payChanges.push({ ...c, prior_pay: p.gross_pay, change_pct: changePct.toFixed(1) });
   }
 
