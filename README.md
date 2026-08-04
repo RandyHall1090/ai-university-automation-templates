@@ -22,9 +22,9 @@ Claude Code, and deploy it in your own environment.
 ## Structure
 
 ```
-sales/<template-slug>/        — 5 templates, maps to the Sales Automation course
-marketing/<template-slug>/    — 5 templates, maps to the Marketing Automation course
-financial/<template-slug>/    — 5 templates, maps to the Financial Automation course (all read-only)
+sales/<template-slug>/        — 14 templates, maps to the Sales Automation course
+marketing/<template-slug>/    — 15 templates, maps to the Marketing Automation course
+financial/<template-slug>/    — 14 templates, maps to the Financial Automation course (all read-only)
 ```
 
 Each template folder is **self-contained** — a single script plus its own
@@ -51,10 +51,12 @@ adopt one template at a time rather than the whole repo.
 
 ## Tracks
 
-| Track | Templates |
+See each track's own README for the full, current template list and what each one does.
+
+| Track | Template count |
 |---|---|
-| [Sales](sales/) | CRM Hygiene Bot · Outreach & Follow-Up Automation · Proposal & Quote Generator · Pipeline Health Dashboard · Meeting Intelligence Summarizer |
-| [Marketing](marketing/) | Campaign Automation · Lead Scoring & Routing · Content & Social Automation · KPI Dashboard · A/B Test Runner |
-| [Financial](financial/) | Expense Categorization · Reconciliation Assistant · KPI Dashboard Builder · Reporting Automation · Risk & Compliance Flagging |
+| [Sales](sales/) | 14 |
+| [Marketing](marketing/) | 15 |
+| [Financial](financial/) | 14 (all read-only) |
 
 Built by [Securafy](https://securafy.com) for [AI University](https://learn.securafyai.com).
