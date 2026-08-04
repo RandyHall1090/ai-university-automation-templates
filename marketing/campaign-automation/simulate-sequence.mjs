@@ -45,12 +45,32 @@ function daysSince(dateStr) {
   return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+// Supports multiple AND-joined clauses and =, !=, >, <, >=, <= operators.
+// A clause that can't be parsed FAILS CLOSED (condition not met) — the
+// prior version treated an unparseable condition as met, which showed a
+// send the real ESP would have suppressed.
 function conditionMet(condition, subscriber) {
   if (!condition) return true;
-  const [, field, op, value] = condition.match(/(\w+)(!=|=)(\w+)/) ?? [];
-  if (!field) return true;
-  const actual = subscriber[field] ?? "";
-  return op === "!=" ? actual !== value : actual === value;
+  const clauses = condition.split(/\s+AND\s+/i);
+  return clauses.every((clause) => {
+    const m = clause.trim().match(/^(\w+)\s*(!=|>=|<=|=|>|<)\s*(.+)$/);
+    if (!m) return false;
+    const [, field, op, rawValue] = m;
+    const actual = subscriber[field] ?? "";
+    const value = rawValue.trim();
+    const numActual = Number(actual);
+    const numValue = Number(value);
+    const bothNumeric = actual !== "" && value !== "" && !Number.isNaN(numActual) && !Number.isNaN(numValue);
+    switch (op) {
+      case "!=": return actual !== value;
+      case "=": return actual === value;
+      case ">": return bothNumeric ? numActual > numValue : actual > value;
+      case "<": return bothNumeric ? numActual < numValue : actual < value;
+      case ">=": return bothNumeric ? numActual >= numValue : actual >= value;
+      case "<=": return bothNumeric ? numActual <= numValue : actual <= value;
+      default: return false;
+    }
+  });
 }
 
 async function main() {
@@ -68,10 +88,13 @@ async function main() {
   for (const sub of subscribers) {
     const elapsed = daysSince(sub.signup_date);
     if (elapsed === null) continue;
-    const due = sorted.find((s) => s.day_offset === elapsed);
-    if (!due) continue;
-    if (!conditionMet(due.condition, sub)) continue;
-    sends.push({ id: sub.id, email: sub.email, step: due.step, subject: due.subject });
+    // Most recently reached step, not one landing on today's exact day count
+    // — a skipped day must not permanently drop a step. See README.
+    const due = sorted.filter((s) => s.day_offset <= elapsed);
+    if (!due.length) continue;
+    const step = due[due.length - 1];
+    if (!conditionMet(step.condition, sub)) continue;
+    sends.push({ id: sub.id, email: sub.email, step: step.step, subject: step.subject });
   }
 
   await writeFile("simulated-sends.csv", toCsv(["id", "email", "step", "subject"], sends), "utf8");

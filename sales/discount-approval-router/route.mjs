@@ -45,17 +45,26 @@ async function main() {
   const deals = parseCsv(await readFile(dealsPath, "utf8"));
   const { tiers } = JSON.parse(await readFile(rulesPath, "utf8"));
   const sortedTiers = [...tiers].sort((a, b) => a.max_discount_pct - b.max_discount_pct);
+  const topTier = sortedTiers[sortedTiers.length - 1];
 
   const queue = deals.map((d) => {
     const list = Number(d.list_price) || 0;
     const sale = Number(d.sale_price) || 0;
     const discountPct = list > 0 ? ((list - sale) / list) * 100 : 0;
-    const tier = sortedTiers.find((t) => discountPct <= t.max_discount_pct);
-    return { ...d, discount_pct: discountPct.toFixed(1), approver_needed: tier?.approver || "none" };
-  }).filter((d) => d.approver_needed !== "none");
+    let tier = sortedTiers.find((t) => discountPct <= t.max_discount_pct);
+    // A discount deeper than every configured tier must still be routed —
+    // to the most senior approver — rather than silently dropped from the
+    // queue. Dropping it would make the riskiest discounts invisible.
+    let exceedsMaxTier = false;
+    if (!tier) {
+      tier = topTier;
+      exceedsMaxTier = true;
+    }
+    return { ...d, discount_pct: discountPct.toFixed(1), approver_needed: tier?.approver || "none", exceeds_max_tier: exceedsMaxTier };
+  }).filter((d) => d.approver_needed !== "none" || d.exceeds_max_tier);
 
-  await writeFile("approval-queue.csv", toCsv([...Object.keys(deals[0] ?? {}), "discount_pct", "approver_needed"], queue), "utf8");
-  console.log(`${queue.length} of ${deals.length} deals require approval sign-off.`);
+  await writeFile("approval-queue.csv", toCsv([...Object.keys(deals[0] ?? {}), "discount_pct", "approver_needed", "exceeds_max_tier"], queue), "utf8");
+  console.log(`${queue.length} of ${deals.length} deals require approval sign-off (${queue.filter((d) => d.exceeds_max_tier).length} exceed every configured tier).`);
   console.log("Wrote approval-queue.csv — no approvals were granted automatically.");
 }
 

@@ -49,13 +49,17 @@ async function main() {
   const runwayMonths = avgBurn > 0 ? Number(latest.cash_balance) / avgBurn : null;
 
   const unpaid = receivables.filter((r) => String(r.paid).toLowerCase() !== "true");
-  const buckets = { current: 0, days_30: 0, days_60: 0, days_90_plus: 0 };
+  // Standard AR aging buckets: current, 1-30, 31-60, 61-90, 90+. The prior
+  // version had no 61-90 bucket, so anything past 60 days landed in "90+"
+  // regardless of how overdue it actually was.
+  const buckets = { current: 0, days_30: 0, days_60: 0, days_90: 0, days_90_plus: 0 };
   for (const inv of unpaid) {
     const overdue = -daysUntil(inv.due_date);
     const amt = Number(inv.amount) || 0;
     if (overdue <= 0) buckets.current += amt;
     else if (overdue <= 30) buckets.days_30 += amt;
     else if (overdue <= 60) buckets.days_60 += amt;
+    else if (overdue <= 90) buckets.days_90 += amt;
     else buckets.days_90_plus += amt;
   }
 
@@ -78,6 +82,7 @@ async function main() {
     `- Current: $${buckets.current.toLocaleString()}`,
     `- 1–30 days: $${buckets.days_30.toLocaleString()}`,
     `- 31–60 days: $${buckets.days_60.toLocaleString()}`,
+    `- 61–90 days: $${buckets.days_90.toLocaleString()}`,
     `- 90+ days: $${buckets.days_90_plus.toLocaleString()}`,
     "",
     "## Budget vs. Actual",

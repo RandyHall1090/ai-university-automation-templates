@@ -2,11 +2,11 @@
 
 Flags deals whose discount percentage exceeds your configured approval threshold and routes them to the right approver — **flags and routes for review only, never auto-approves a discount.**
 
-> **This is a starting point, not a supported product.** Read every line before you run it, adapt it to your own stack, and test in a non-production environment first. See the [repo README](../../README.md) for the full disclaimer.
+> **This is a starting point, not a supported product.** Read every line before you run it, adapt it to your own stack, and test in a non-production environment first. Once you customize and run it, you own and operate it. See the [repo README](../../README.md) for the full disclaimer.
 
 ## What it does
 
-Reads `deals.csv` (`id,name,rep,list_price,sale_price`) and `approval-rules.json` (discount-percentage tiers mapped to an approver). Computes each deal's discount %, matches it to the right tier, and outputs `approval-queue.csv` listing which deals need whose sign-off. No approval is ever granted automatically.
+Reads `deals.csv` (`id,name,rep,list_price,sale_price`) and `approval-rules.json` (discount-percentage tiers mapped to an approver). Computes each deal's discount %, matches it to the right tier, and outputs `approval-queue.csv` listing which deals need whose sign-off. A discount deeper than every configured tier is still included — routed to your most senior configured approver, with `exceeds_max_tier=true` — rather than silently dropped. No approval is ever granted automatically.
 
 ## Adapt to your stack
 

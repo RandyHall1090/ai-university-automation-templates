@@ -6,7 +6,7 @@ Tracks referral codes and resulting signups, and computes rewards owed per refer
 
 ## What it does
 
-Reads `referrals.csv` (`referrer_email,referral_code,referred_email,signup_date,converted`) and `reward-rules.json` (reward amount per converted referral, optional cap). Tallies converted referrals per referrer and computes reward owed. Outputs `rewards-owed.csv` for your finance/ops team to actually issue.
+Reads `referrals.csv` (`referrer_email,referral_code,referred_email,signup_date,converted`) and `reward-rules.json` (reward amount per converted referral, optional cap). Tallies converted referrals per referrer (email matching is case-insensitive) and de-duplicates by `referred_email` per referrer, so the same referred contact appearing twice in an export doesn't get counted — and paid — twice. Computes reward owed, capped at `max_reward_per_referrer` if set. Outputs `rewards-owed.csv` for your finance/ops team to actually issue.
 
 ## Adapt to your stack
 

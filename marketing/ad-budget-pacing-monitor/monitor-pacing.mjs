@@ -35,11 +35,22 @@ async function main() {
   const tolerance = flag ? Number(flag.split("=")[1]) : 15;
 
   const rows = parseCsv(await readFile(input, "utf8"));
+  let invalidCount = 0;
   const results = rows.map((r) => {
-    const expectedPct = Number(r.day_of_month) / Number(r.days_in_month);
-    const expectedSpend = expectedPct * Number(r.monthly_budget);
-    const actualSpend = Number(r.month_to_date_spend) || 0;
-    const deviationPct = expectedSpend > 0 ? ((actualSpend - expectedSpend) / expectedSpend) * 100 : 0;
+    const dayOfMonth = Number(r.day_of_month);
+    const daysInMonth = Number(r.days_in_month);
+    const monthlyBudget = Number(r.monthly_budget);
+    const actualSpend = Number(r.month_to_date_spend);
+
+    // A malformed row must never report "on_pace" — that's the one status
+    // that tells someone not to look closer. Flag it as invalid instead.
+    if (!Number.isFinite(dayOfMonth) || !Number.isFinite(daysInMonth) || daysInMonth <= 0 || !Number.isFinite(monthlyBudget) || !Number.isFinite(actualSpend)) {
+      invalidCount++;
+      return { campaign: r.campaign, expected_spend: "n/a", actual_spend: r.month_to_date_spend ?? "", deviation_pct: "n/a", status: "invalid_input" };
+    }
+
+    const expectedSpend = (dayOfMonth / daysInMonth) * monthlyBudget;
+    const deviationPct = expectedSpend > 0 ? ((actualSpend - expectedSpend) / expectedSpend) * 100 : (actualSpend > 0 ? 100 : 0);
     let status = "on_pace";
     if (deviationPct > tolerance) status = "over_pace";
     else if (deviationPct < -tolerance) status = "under_pace";
@@ -47,10 +58,10 @@ async function main() {
   });
 
   const md = ["# Ad Budget Pacing Report", "", "| Campaign | Expected | Actual | Deviation | Status |", "|---|---|---|---|---|",
-    ...results.map((r) => `| ${r.campaign} | $${r.expected_spend} | $${r.actual_spend} | ${r.deviation_pct}% | ${r.status} |`)].join("\n");
+    ...results.map((r) => `| ${r.campaign} | ${r.expected_spend === "n/a" ? "n/a" : "$" + r.expected_spend} | ${r.actual_spend === "" ? "n/a" : "$" + r.actual_spend} | ${r.deviation_pct === "n/a" ? "n/a" : r.deviation_pct + "%"} | ${r.status} |`)].join("\n");
 
   await writeFile("pacing-report.md", md + "\n", "utf8");
-  console.log(`${results.filter((r) => r.status !== "on_pace").length} of ${results.length} campaigns off pace.`);
+  console.log(`${results.filter((r) => r.status !== "on_pace" && r.status !== "invalid_input").length} of ${results.length} campaigns off pace, ${invalidCount} with invalid/missing input data.`);
   console.log("Wrote pacing-report.md");
 }
 

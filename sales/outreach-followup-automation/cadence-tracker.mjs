@@ -69,26 +69,29 @@ async function main() {
     const elapsed = daysSince(p.cadence_start_date);
     if (elapsed === null) continue;
 
+    // The step due today is the MOST RECENTLY reached one, not one that
+    // happens to land on today's exact elapsed-day count — a skipped
+    // weekend/holiday must not permanently drop a step. Run this daily and
+    // a prospect keeps showing up on their current step until the next
+    // step's offset arrives.
     const due = sortedSteps.filter((s) => s.day_offset <= elapsed);
     if (!due.length) continue;
     const currentStep = due[due.length - 1];
 
-    if (currentStep.day_offset === elapsed) {
-      actions.push({
-        id: p.id,
-        name: p.name,
-        email: p.email,
-        step: currentStep.step,
-        channel: currentStep.channel,
-        note: currentStep.note,
-      });
-    }
+    actions.push({
+      id: p.id,
+      name: p.name,
+      email: p.email,
+      step: currentStep.step,
+      channel: currentStep.channel,
+      note: currentStep.note,
+    });
   }
 
   const outHeaders = ["id", "name", "email", "step", "channel", "note"];
   await writeFile("next-actions.csv", toCsv(outHeaders, actions), "utf8");
 
-  console.log(`${prospects.length} prospects checked — ${excludedForReply} excluded (already replied) — ${actions.length} due for action today.`);
+  console.log(`${prospects.length} prospects checked — ${excludedForReply} excluded (already replied) — ${actions.length} on an active cadence step.`);
   console.log("Wrote next-actions.csv");
 }
 

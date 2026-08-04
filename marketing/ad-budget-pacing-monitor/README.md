@@ -6,7 +6,7 @@ Tracks ad spend against monthly budget pacing and flags campaigns running over o
 
 ## What it does
 
-Reads `spend.csv` (`campaign,month_to_date_spend,monthly_budget,day_of_month,days_in_month`). Computes expected spend-to-date based on straight-line pacing, compares to actual, and flags campaigns more than `--tolerance-pct` (default 15%) off pace in either direction. Outputs `pacing-report.md`.
+Reads `spend.csv` (`campaign,month_to_date_spend,monthly_budget,day_of_month,days_in_month`). Computes expected spend-to-date based on straight-line pacing, compares to actual, and flags campaigns more than `--tolerance-pct` (default 15%) off pace in either direction. A row with a missing or non-numeric field (or `days_in_month` ≤ 0) is reported as `invalid_input`, never as `on_pace` — a malformed row must never look healthy. Outputs `pacing-report.md`.
 
 ## Adapt to your stack
 

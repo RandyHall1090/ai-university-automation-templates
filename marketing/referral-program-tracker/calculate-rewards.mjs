@@ -46,8 +46,25 @@ async function main() {
   const { reward_per_conversion, max_reward_per_referrer } = JSON.parse(await readFile(rulesPath, "utf8"));
 
   const converted = referrals.filter((r) => String(r.converted).toLowerCase() === "true");
+
+  // Lowercase the referrer key (every other email-keyed script in this repo
+  // does this) so "Bob@x.com" and "bob@x.com" aren't treated as different
+  // people — that would let one person clear the per-referrer cap twice.
+  // Also dedupe by referred_email per referrer, so the same referred
+  // contact appearing twice in the export (a common export artifact) isn't
+  // paid out twice.
+  const seenReferredByReferrer = new Map();
   const byReferrer = {};
-  for (const r of converted) byReferrer[r.referrer_email] = (byReferrer[r.referrer_email] || 0) + 1;
+  for (const r of converted) {
+    const referrer = (r.referrer_email || "").toLowerCase().trim();
+    if (!referrer) continue;
+    const referred = (r.referred_email || "").toLowerCase().trim();
+    const seen = seenReferredByReferrer.get(referrer) ?? new Set();
+    if (referred && seen.has(referred)) continue;
+    if (referred) seen.add(referred);
+    seenReferredByReferrer.set(referrer, seen);
+    byReferrer[referrer] = (byReferrer[referrer] || 0) + 1;
+  }
 
   const owed = Object.entries(byReferrer).map(([email, count]) => {
     const raw = count * reward_per_conversion;

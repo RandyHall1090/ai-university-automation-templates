@@ -39,8 +39,12 @@ function toCsv(headers, rows) {
   return lines.join("\n") + "\n";
 }
 
+// Uses getUTCDay(), not getDay(): a date-only string like "2026-08-01" is
+// parsed as UTC midnight, so reading it back in local time (getDay()) can
+// shift the day by one in any timezone behind UTC — misclassifying real
+// Saturdays as weekdays and vice versa.
 function isWeekend(dateStr) {
-  const day = new Date(dateStr).getDay();
+  const day = new Date(dateStr).getUTCDay();
   return day === 0 || day === 6;
 }
 

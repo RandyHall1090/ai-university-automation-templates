@@ -6,7 +6,7 @@ Defines a trigger → condition → action email/drip sequence and simulates it 
 
 ## What it does
 
-Reads a `sequence.json` (steps with a day-offset trigger and an optional condition) and a `subscribers.csv` (`id,email,signup_date,tag`). For each subscriber, computes which step they'd currently be on, and whether any condition (e.g. `tag=trial`) gates them out of a step. **This script does not send email** — it produces `simulated-sends.csv`, a dry-run showing exactly what would go out and to whom, so you can verify the sequence logic before connecting it to your real ESP.
+Reads a `sequence.json` (steps with a day-offset trigger and an optional condition) and a `subscribers.csv` (`id,email,signup_date,tag`, plus whatever fields your conditions reference). For each subscriber, finds the most recently reached step (not one landing on today's exact day count — a skipped day must not permanently drop a step), and evaluates its `condition` if present. Conditions support `=`, `!=`, `>`, `<`, `>=`, `<=`, and multiple clauses joined with `AND` (e.g. `"tag!=customer AND score>=50"`). A condition that can't be parsed **fails closed** (treated as not met) rather than silently sending. **This script does not send email** — it produces `simulated-sends.csv`, a dry-run showing exactly what would go out and to whom, so you can verify the sequence logic before connecting it to your real ESP.
 
 ## Adapt to your stack
 

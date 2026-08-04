@@ -6,11 +6,11 @@ Computes each rep's quota attainment percentage from closed-won deals for a peri
 
 ## What it does
 
-Reads `closed-won.csv` (`rep,amount,close_date`) and `quotas.csv` (`rep,quota,period`). Sums closed-won amount per rep and divides by their quota for that period. Outputs `attainment-report.md`, sorted from highest to lowest attainment.
+Reads `closed-won.csv` (`rep,amount,close_date`) and `quotas.csv` (`rep,quota,period`). For each quota row, `period` is parsed as either `YYYY-QN` (e.g. `2026-Q1`) or `YYYY-MM` (e.g. `2026-03`), and only deals whose `close_date` falls inside that window count toward that rep's attainment — so a single `quotas.csv` covering multiple periods for the same rep works correctly instead of double-counting the same closed revenue against every row. A quota row with an unrecognized period format falls back to counting all of that rep's deals, and is called out in the report. Outputs `attainment-report.md`, sorted from highest to lowest attainment.
 
 ## Adapt to your stack
 
-Export closed-won deals from your CRM filtered to the period you're measuring, and pull quota figures from wherever comp plans live (a spreadsheet, your comp platform).
+Export closed-won deals from your CRM with `close_date` populated, and pull quota figures (with a real `period` per row) from wherever comp plans live (a spreadsheet, your comp platform).
 
 ## Run it
 

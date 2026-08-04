@@ -50,13 +50,17 @@ async function main() {
   const flag = process.argv.find((a) => a.startsWith("--max-gap-days="));
   const maxGap = flag ? Number(flag.split("=")[1]) : 14;
 
-  const deals = parseCsv(await readFile(input, "utf8"));
+  const allDeals = parseCsv(await readFile(input, "utf8"));
+  // "Open" means outcome is blank — same convention as pipeline-health-dashboard.
+  // Without this filter, closed deals (which never get new activity) dominate
+  // the flagged list and the printed "open deals" count is simply wrong.
+  const deals = allDeals.filter((d) => !d.outcome);
   const gaps = deals
     .map((d) => ({ ...d, gap_days: daysSince(d.last_activity_date) }))
     .filter((d) => d.gap_days !== null && d.gap_days > maxGap)
     .sort((a, b) => b.gap_days - a.gap_days);
 
-  await writeFile("activity-gaps.csv", toCsv([...Object.keys(deals[0] ?? {}), "gap_days"], gaps), "utf8");
+  await writeFile("activity-gaps.csv", toCsv([...Object.keys(deals[0] ?? allDeals[0] ?? {}), "gap_days"], gaps), "utf8");
   console.log(`${gaps.length} of ${deals.length} open deals exceed the ${maxGap}-day activity gap threshold.`);
   console.log("Wrote activity-gaps.csv");
 }

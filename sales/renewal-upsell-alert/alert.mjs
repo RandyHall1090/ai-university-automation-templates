@@ -35,8 +35,16 @@ function toCsv(headers, rows) {
   return lines.join("\n") + "\n";
 }
 
-function daysUntil(dateStr) {
-  return Math.floor((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+// UTC-consistent days-until: a date-only string is anchored to UTC midnight
+// and compared against "today" as UTC midnight, so a renewal due TODAY
+// reports 0 (and gets alerted), not -1 (and gets silently excluded).
+function daysUntilUtc(dateStr) {
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr)) ? `${dateStr}T00:00:00Z` : dateStr;
+  const target = new Date(iso);
+  if (Number.isNaN(target.getTime())) return null;
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((target.getTime() - todayUtc) / (1000 * 60 * 60 * 24));
 }
 
 async function main() {
@@ -51,10 +59,18 @@ async function main() {
   const contracts = parseCsv(await readFile(input, "utf8"));
   const alerts = contracts.map((c) => {
     const reasons = [];
-    const daysLeft = daysUntil(c.renewal_date);
-    if (daysLeft >= 0 && daysLeft <= windowDays) reasons.push(`renewal_in_${daysLeft}d`);
-    const utilization = (Number(c.seats_used) || 0) / (Number(c.seats_purchased) || 1);
-    if (utilization >= 0.9) reasons.push(`upsell_candidate_${Math.round(utilization * 100)}pct_utilized`);
+    const daysLeft = daysUntilUtc(c.renewal_date);
+    if (daysLeft !== null && daysLeft >= 0 && daysLeft <= windowDays) reasons.push(`renewal_in_${daysLeft}d`);
+    else if (daysLeft !== null && daysLeft < 0) reasons.push(`renewal_overdue_${-daysLeft}d`);
+
+    const seatsPurchased = Number(c.seats_purchased);
+    if (seatsPurchased > 0) {
+      const utilization = (Number(c.seats_used) || 0) / seatsPurchased;
+      if (utilization >= 0.9) reasons.push(`upsell_candidate_${Math.round(utilization * 100)}pct_utilized`);
+    } else if (c.seats_purchased !== undefined && c.seats_purchased !== "") {
+      reasons.push("invalid_seats_purchased");
+    }
+
     return { ...c, alert_reasons: reasons.join("|") };
   }).filter((c) => c.alert_reasons);
 

@@ -11,7 +11,7 @@ Reads two files:
 - `cadence.json` — your sequence definition (step number, day offset, channel, subject/note)
 - `prospects.csv` — one row per prospect with `id,name,email,cadence_start_date,replied,last_reply_date`
 
-For each prospect still in the cadence (`replied` is false/empty), it computes which step they should be on today based on elapsed days since `cadence_start_date`, and outputs `next-actions.csv` listing exactly who needs to be touched today and with which step. Anyone with `replied=true` is automatically excluded — the whole point is a cadence that respects a real reply instead of blasting through a fixed schedule.
+For each prospect still in the cadence (`replied` is false/empty), it finds the most recently reached step based on elapsed days since `cadence_start_date` — not one that lands on today's exact day count, since a skipped weekend or holiday must not permanently drop a step — and outputs `next-actions.csv` listing everyone on an active step today. Run it daily: a prospect keeps appearing on their current step until the next step's offset arrives. Anyone with `replied=true` is automatically excluded.
 
 This script **does not send anything** — it tells you who to act on. Wire the output to your actual send mechanism (your ESP, your CRM's sequence tool, or a manual send) once you've reviewed it.
 
