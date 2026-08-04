@@ -26,12 +26,17 @@ function parseCsv(text) {
   });
 }
 
-// Normalizes an employee_id for matching across two exports: trims
-// whitespace and strips leading zeros so "0042" and "42" are treated as
-// the same employee instead of flagging every real employee as both
-// new and removed just because the two payroll runs formatted IDs differently.
 function normalizeId(id) {
   return String(id ?? "").trim().replace(/^0+(?=\d)/, "");
+}
+
+function parseMoney(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const cleaned = String(v).replace(/[$,]/g, "").trim();
+  const negParen = /^\(.*\)$/.test(cleaned);
+  const num = Number(negParen ? cleaned.slice(1, -1) : cleaned);
+  if (Number.isNaN(num)) return null;
+  return negParen ? -num : num;
 }
 
 async function main() {
@@ -51,12 +56,22 @@ async function main() {
   const newEmployees = current.filter((c) => !priorById.has(normalizeId(c.employee_id)));
   const removedEmployees = prior.filter((p) => !currentById.has(normalizeId(p.employee_id)));
   const payChanges = [];
+  let unparseableCount = 0;
+
   for (const c of current) {
     const p = priorById.get(normalizeId(c.employee_id));
     if (!p) continue;
-    const priorPay = Number(p.gross_pay);
-    if (!priorPay) continue;
-    const changePct = ((Number(c.gross_pay) - priorPay) / priorPay) * 100;
+    const priorPay = parseMoney(p.gross_pay);
+    const currentPay = parseMoney(c.gross_pay);
+    if (priorPay === null || currentPay === null) { unparseableCount++; continue; }
+    if (priorPay === 0) {
+      // A genuine $0 -> real pay (e.g. return from unpaid leave) is the
+      // largest possible change and must be reported, not divided-by-zero
+      // into oblivion.
+      if (currentPay !== 0) payChanges.push({ ...c, prior_pay: p.gross_pay, change_pct: "new_from_zero" });
+      continue;
+    }
+    const changePct = ((currentPay - priorPay) / priorPay) * 100;
     if (Math.abs(changePct) > threshold) payChanges.push({ ...c, prior_pay: p.gross_pay, change_pct: changePct.toFixed(1) });
   }
 
@@ -66,12 +81,13 @@ async function main() {
     newEmployees.length ? newEmployees.map((e) => `- ${e.name} (${e.employee_id}): $${e.gross_pay}`).join("\n") : "None.", "",
     `## Removed Employees (${removedEmployees.length})`, "",
     removedEmployees.length ? removedEmployees.map((e) => `- ${e.name} (${e.employee_id}): was $${e.gross_pay}`).join("\n") : "None.", "",
-    `## Pay Changes > ${threshold}% (${payChanges.length})`, "",
-    payChanges.length ? payChanges.map((e) => `- ${e.name}: $${e.prior_pay} → $${e.gross_pay} (${e.change_pct}%)`).join("\n") : "None.",
+    `## Pay Changes > ${threshold}% or From Zero (${payChanges.length})`, "",
+    payChanges.length ? payChanges.map((e) => `- ${e.name}: $${e.prior_pay} → $${e.gross_pay} (${e.change_pct === "new_from_zero" ? "started from $0" : e.change_pct + "%"})`).join("\n") : "None.",
+    unparseableCount ? `\n${unparseableCount} employee(s) skipped — unparseable gross_pay value in one or both exports.` : "",
   ].join("\n");
 
   await writeFile("payroll-anomalies.md", md + "\n", "utf8");
-  console.log(`${newEmployees.length} new, ${removedEmployees.length} removed, ${payChanges.length} pay change anomalies.`);
+  console.log(`${newEmployees.length} new, ${removedEmployees.length} removed, ${payChanges.length} pay change anomalies, ${unparseableCount} skipped (unparseable).`);
   console.log("Wrote payroll-anomalies.md. Review before approving in your payroll system — nothing was submitted.");
 }
 

@@ -35,6 +35,22 @@ function toCsv(headers, rows) {
   return lines.join("\n") + "\n";
 }
 
+// Strips currency symbols/commas/parenthesized negatives so "$1,200.00" and
+// "(500)" parse correctly instead of silently becoming NaN (which two
+// invoices would then "match" on if left unguarded, or never match at all).
+function parseMoney(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const cleaned = String(v).replace(/[$,]/g, "").trim();
+  const negParen = /^\(.*\)$/.test(cleaned);
+  const num = Number(negParen ? cleaned.slice(1, -1) : cleaned);
+  if (Number.isNaN(num)) return null;
+  return negParen ? -num : num;
+}
+
+function normVendor(v) {
+  return String(v ?? "").trim().toLowerCase();
+}
+
 function daysBetween(d1, d2) {
   return Math.abs((new Date(d1).getTime() - new Date(d2).getTime()) / (1000 * 60 * 60 * 24));
 }
@@ -50,21 +66,31 @@ async function main() {
 
   const invoices = parseCsv(await readFile(input, "utf8"));
   const flagged = [];
+  let unparseableAmounts = 0;
 
   for (let i = 0; i < invoices.length; i++) {
     for (let j = i + 1; j < invoices.length; j++) {
       const a = invoices[i], b = invoices[j];
-      if (a.vendor !== b.vendor || Number(a.amount) !== Number(b.amount)) continue;
+      if (normVendor(a.vendor) !== normVendor(b.vendor)) continue;
+
+      const amountA = parseMoney(a.amount);
+      const amountB = parseMoney(b.amount);
+      if (amountA === null || amountB === null) { unparseableAmounts++; continue; }
+
       if (a.invoice_number === b.invoice_number) {
-        flagged.push({ ...a, match_type: "exact_duplicate", matched_invoice_id: b.invoice_id });
-      } else if (daysBetween(a.invoice_date, b.invoice_date) <= windowDays) {
+        flagged.push({
+          ...a,
+          match_type: amountA === amountB ? "exact_duplicate" : "same_invoice_number_different_amount",
+          matched_invoice_id: b.invoice_id,
+        });
+      } else if (amountA === amountB && daysBetween(a.invoice_date, b.invoice_date) <= windowDays) {
         flagged.push({ ...a, match_type: "possible_duplicate", matched_invoice_id: b.invoice_id });
       }
     }
   }
 
   await writeFile("duplicate-invoice-flags.csv", toCsv([...Object.keys(invoices[0] ?? {}), "match_type", "matched_invoice_id"], flagged), "utf8");
-  console.log(`${flagged.length} potential duplicate(s) flagged out of ${invoices.length} invoices.`);
+  console.log(`${flagged.length} potential duplicate(s) flagged out of ${invoices.length} invoices (${unparseableAmounts} vendor-matched pair(s) skipped — unparseable amount).`);
   console.log("Wrote duplicate-invoice-flags.csv. No invoice was paid, held, or modified — review manually.");
 }
 

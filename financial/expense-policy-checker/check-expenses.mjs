@@ -36,6 +36,15 @@ function toCsv(headers, rows) {
   return lines.join("\n") + "\n";
 }
 
+function parseMoney(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const cleaned = String(v).replace(/[$,]/g, "").trim();
+  const negParen = /^\(.*\)$/.test(cleaned);
+  const num = Number(negParen ? cleaned.slice(1, -1) : cleaned);
+  if (Number.isNaN(num)) return null;
+  return negParen ? -num : num;
+}
+
 async function main() {
   const [, , expPath, policyPath] = process.argv;
   if (!expPath || !policyPath) {
@@ -45,22 +54,22 @@ async function main() {
   const expenses = parseCsv(await readFile(expPath, "utf8"));
   const { category_limits, receipt_required_above, disallowed_categories } = JSON.parse(await readFile(policyPath, "utf8"));
 
-  // Normalize policy keys/values to lowercase so a policy.json written as
-  // "Meals" still matches an export that has "meals" — a case mismatch here
-  // would silently let an over-limit expense through unflagged, which is
-  // worse than the noisy alternative.
   const limitsByLowerCategory = Object.fromEntries(
     Object.entries(category_limits || {}).map(([k, v]) => [k.toLowerCase(), v])
   );
   const disallowedLower = (disallowed_categories || []).map((c) => c.toLowerCase());
+  // A missing receipt_required_above must NOT silently disable the receipt
+  // rule (amount > undefined is always false) — default to 0, the safe
+  // direction (every unreceipted expense gets flagged) rather than none.
+  const receiptThreshold = Number.isFinite(receipt_required_above) ? receipt_required_above : 0;
 
   const violations = expenses.map((e) => {
     const flags = [];
-    const amount = Number(e.amount) || 0;
+    const amount = parseMoney(e.amount) ?? 0;
     const categoryLower = (e.category || "").toLowerCase();
     const limit = limitsByLowerCategory[categoryLower];
     if (limit !== undefined && amount > limit) flags.push(`over_category_limit_$${limit}`);
-    if (amount > receipt_required_above && String(e.has_receipt).toLowerCase() !== "true") flags.push("missing_receipt");
+    if (amount > receiptThreshold && String(e.has_receipt).toLowerCase() !== "true") flags.push("missing_receipt");
     if (disallowedLower.includes(categoryLower)) flags.push("disallowed_category");
     return { ...e, flags: flags.join("|") };
   }).filter((e) => e.flags);

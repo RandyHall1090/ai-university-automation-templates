@@ -28,7 +28,9 @@ function parseCsv(text) {
 }
 
 function daysUntil(dateStr) {
-  return Math.floor((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.floor((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
 async function main() {
@@ -41,17 +43,26 @@ async function main() {
   const windowDays = flag ? Number(flag.split("=")[1]) : 30;
 
   const deadlines = parseCsv(await readFile(input, "utf8"));
-  const upcoming = deadlines
-    .filter((d) => d.status !== "filed")
-    .map((d) => ({ ...d, days_until: daysUntil(d.due_date) }))
-    .filter((d) => d.days_until <= windowDays)
-    .sort((a, b) => a.days_until - b.days_until);
+  // status comparison is case-insensitive — "Filed"/"FILED" must not be
+  // treated as unfiled and reported as an outstanding deadline.
+  const unfiled = deadlines
+    .filter((d) => (d.status || "").trim().toLowerCase() !== "filed")
+    .map((d) => ({ ...d, days_until: daysUntil(d.due_date) }));
+
+  // A blank/malformed due_date must be surfaced, not silently dropped —
+  // that's the worst direction for a compliance-reminder tool to fail in.
+  const invalidDate = unfiled.filter((d) => d.days_until === null);
+  const upcoming = unfiled.filter((d) => d.days_until !== null && d.days_until <= windowDays).sort((a, b) => a.days_until - b.days_until);
 
   const md = ["# Upcoming Tax Deadlines", "", "| Filing | Jurisdiction | Due | Days Until | Owner |", "|---|---|---|---|---|",
-    ...upcoming.map((d) => `| ${d.filing_name} | ${d.jurisdiction} | ${d.due_date} | ${d.days_until} | ${d.owner} |`)].join("\n");
+    ...upcoming.map((d) => `| ${d.filing_name} | ${d.jurisdiction} | ${d.due_date} | ${d.days_until} | ${d.owner} |`),
+    "",
+    `## Needs Review — invalid or blank due_date (${invalidDate.length})`, "",
+    invalidDate.length ? invalidDate.map((d) => `- ${d.filing_name} (${d.jurisdiction}, owner: ${d.owner}) — due_date="${d.due_date}"`).join("\n") : "None.",
+  ].join("\n");
 
   await writeFile("upcoming-deadlines.md", md + "\n", "utf8");
-  console.log(`${upcoming.length} unfiled deadline(s) within ${windowDays} days.`);
+  console.log(`${upcoming.length} unfiled deadline(s) within ${windowDays} days, ${invalidDate.length} need review (invalid due_date).`);
   console.log("Wrote upcoming-deadlines.md. This does not file anything — verify with your tax advisor.");
 }
 

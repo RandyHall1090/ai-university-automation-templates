@@ -25,6 +25,15 @@ function parseCsv(text) {
   });
 }
 
+function parseMoney(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const cleaned = String(v).replace(/[$,]/g, "").trim();
+  const negParen = /^\(.*\)$/.test(cleaned);
+  const num = Number(negParen ? cleaned.slice(1, -1) : cleaned);
+  if (Number.isNaN(num)) return null;
+  return negParen ? -num : num;
+}
+
 async function main() {
   const input = process.argv[2];
   if (!input) {
@@ -35,25 +44,33 @@ async function main() {
   const threshold = flag ? Number(flag.split("=")[1]) : 25;
 
   const txs = parseCsv(await readFile(input, "utf8"));
+  // Vendor names are normalized (trim + lowercase) for grouping so "AWS" and
+  // "aws" don't split one vendor's spend into two smaller, individually
+  // unremarkable shares — the exact failure mode that hides real concentration.
   const byVendor = {};
   let total = 0;
   for (const t of txs) {
-    const amt = Number(t.amount) || 0;
-    byVendor[t.vendor] = (byVendor[t.vendor] || 0) + amt;
+    const key = String(t.vendor ?? "").trim().toLowerCase();
+    if (!key) continue;
+    const amt = parseMoney(t.amount) ?? 0;
+    byVendor[key] ??= { label: t.vendor, amount: 0 };
+    byVendor[key].amount += amt;
     total += amt;
   }
 
-  const shares = Object.entries(byVendor).map(([vendor, amount]) => ({ vendor, amount, share_pct: (amount / total) * 100 })).sort((a, b) => b.share_pct - a.share_pct);
-  const flagged = shares.filter((s) => s.share_pct >= threshold);
+  const shares = Object.values(byVendor)
+    .map((v) => ({ vendor: v.label, amount: v.amount, share_pct: total > 0 ? (v.amount / total) * 100 : null }))
+    .sort((a, b) => (b.share_pct ?? 0) - (a.share_pct ?? 0));
+  const flagged = shares.filter((s) => s.share_pct !== null && s.share_pct >= threshold);
 
   const md = [
     "# Vendor Concentration Report", "",
-    `- Total spend: $${total.toLocaleString()}`, "",
+    total > 0 ? `- Total spend: $${total.toLocaleString()}` : "- Total spend: $0 (or all amounts unparseable/net to zero — share percentages cannot be computed)", "",
     "## Flagged (above threshold)", "",
     flagged.length ? flagged.map((s) => `- ${s.vendor}: $${s.amount.toLocaleString()} (${s.share_pct.toFixed(1)}% of total spend)`).join("\n") : "None.", "",
     "## All Vendors by Share", "",
     "| Vendor | Spend | Share |", "|---|---|---|",
-    ...shares.map((s) => `| ${s.vendor} | $${s.amount.toLocaleString()} | ${s.share_pct.toFixed(1)}% |`),
+    ...shares.map((s) => `| ${s.vendor} | $${s.amount.toLocaleString()} | ${s.share_pct === null ? "n/a" : s.share_pct.toFixed(1) + "%"} |`),
   ].join("\n");
 
   await writeFile("vendor-concentration-report.md", md + "\n", "utf8");

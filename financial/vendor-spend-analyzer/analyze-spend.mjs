@@ -25,6 +25,16 @@ function parseCsv(text) {
   });
 }
 
+function monthKey(d) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+// Shifts a "YYYY-MM" key by `delta` calendar months (can be negative).
+function shiftMonth(ym, delta) {
+  const [y, m] = ym.split("-").map(Number);
+  return monthKey(new Date(Date.UTC(y, m - 1 + delta, 1)));
+}
+
 async function main() {
   const input = process.argv[2];
   if (!input) {
@@ -42,21 +52,25 @@ async function main() {
     byVendorMonth[t.vendor][month] = (byVendorMonth[t.vendor][month] || 0) + (Number(t.amount) || 0);
   }
 
+  // "This month" is the real current calendar month, not whichever month
+  // happens to be last in the data — and the prior window is the 3 actual
+  // preceding calendar months (missing months count as $0), not just
+  // whatever months happened to have transactions.
+  const currentMonth = monthKey(new Date());
+  const priorMonths = [shiftMonth(currentMonth, -3), shiftMonth(currentMonth, -2), shiftMonth(currentMonth, -1)];
+
   const lines = ["# Vendor Spend Report", ""];
   const spikes = [];
   for (const [vendor, months] of Object.entries(byVendorMonth)) {
-    const sortedMonths = Object.keys(months).sort();
-    const currentMonth = sortedMonths[sortedMonths.length - 1];
-    const prior = sortedMonths.slice(-4, -1);
-    const priorAvg = prior.length ? prior.reduce((s, m) => s + months[m], 0) / prior.length : 0;
-    const current = months[currentMonth];
-    const changePct = priorAvg > 0 ? ((current - priorAvg) / priorAvg) * 100 : 0;
+    const current = months[currentMonth] || 0;
+    const priorAvg = priorMonths.reduce((s, m) => s + (months[m] || 0), 0) / priorMonths.length;
+    const changePct = priorAvg > 0 ? ((current - priorAvg) / priorAvg) * 100 : (current > 0 ? 100 : 0);
     if (changePct > spikeThreshold) spikes.push({ vendor, current, priorAvg, changePct });
     const total = Object.values(months).reduce((s, v) => s + v, 0);
-    lines.push(`- **${vendor}**: total $${total.toLocaleString()} across ${sortedMonths.length} month(s)`);
+    lines.push(`- **${vendor}**: total $${total.toLocaleString()} across ${Object.keys(months).length} month(s) with activity`);
   }
 
-  lines.push("", "## Spend Spikes", "");
+  lines.push("", `## Spend Spikes (this calendar month, ${currentMonth}, vs. trailing 3-month average)`, "");
   lines.push(spikes.length ? spikes.map((s) => `- ${s.vendor}: $${s.current.toFixed(0)} this month vs $${s.priorAvg.toFixed(0)} avg (+${s.changePct.toFixed(0)}%)`).join("\n") : "None.");
 
   await writeFile("vendor-spend-report.md", lines.join("\n") + "\n", "utf8");

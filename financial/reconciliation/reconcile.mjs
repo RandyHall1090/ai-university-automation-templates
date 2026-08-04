@@ -55,13 +55,22 @@ async function main() {
   for (const b of bank) {
     let match = null;
 
+    // A reference/check-number match must ALSO agree on amount — a shared
+    // reference with a different amount is exactly the kind of discrepancy
+    // this tool exists to surface, not silently wave through.
     if (b.reference) {
-      match = ledger.find((l, i) => !usedLedger.has(i) && l.reference === b.reference);
+      match = ledger.find((l, i) => !usedLedger.has(i) && l.reference === b.reference && Number(l.amount) === Number(b.amount));
     }
     if (!match) {
-      match = ledger.find(
-        (l, i) => !usedLedger.has(i) && Number(l.amount) === Number(b.amount) && daysBetween(l.date, b.date) <= toleranceDays
-      );
+      // Among all same-amount candidates within tolerance, pick the CLOSEST
+      // date rather than the first one encountered in file order — first-fit
+      // can steal a ledger row that would have been the exact match for a
+      // later bank row, manufacturing two spurious unmatched entries.
+      const candidates = ledger
+        .map((l, i) => ({ l, i }))
+        .filter(({ l, i }) => !usedLedger.has(i) && Number(l.amount) === Number(b.amount) && daysBetween(l.date, b.date) <= toleranceDays)
+        .sort((x, y) => daysBetween(x.l.date, b.date) - daysBetween(y.l.date, b.date));
+      if (candidates.length) match = candidates[0].l;
     }
 
     if (match) {

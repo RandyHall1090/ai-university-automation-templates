@@ -32,25 +32,39 @@ async function main() {
     process.exit(1);
   }
   const subs = parseCsv(await readFile(input, "utf8"));
+
+  // Category grouping is normalized (trim + lowercase) so "Project Mgmt" and
+  // "project mgmt" don't split one real overlap into two invisible halves.
+  // Blank categories are excluded — they can't establish a real overlap.
   const byCategory = {};
   for (const s of subs) {
-    byCategory[s.category] ??= [];
-    byCategory[s.category].push(s);
+    const key = (s.category || "").trim().toLowerCase();
+    if (!key) continue;
+    byCategory[key] ??= { label: s.category, items: [] };
+    byCategory[key].items.push(s);
   }
 
   const lines = ["# SaaS Spend Overlap Report", ""];
   let overlapCount = 0;
-  for (const [category, items] of Object.entries(byCategory)) {
-    if (items.length > 1) {
+  for (const { label, items } of Object.values(byCategory)) {
+    // Dedupe by vendor within the category — the same vendor listed twice
+    // (e.g. a monthly and an annual line) is one tool, not two competing ones.
+    const uniqueVendors = new Map();
+    for (const i of items) {
+      const vKey = (i.vendor || "").trim().toLowerCase();
+      if (!uniqueVendors.has(vKey)) uniqueVendors.set(vKey, i);
+    }
+    if (uniqueVendors.size > 1) {
       overlapCount++;
-      const total = items.reduce((s, i) => s + (Number(i.monthly_cost) || 0), 0);
-      lines.push(`## ${category} — ${items.length} tools, $${total.toFixed(0)}/mo combined`, "");
-      for (const i of items) lines.push(`- ${i.vendor}: $${i.monthly_cost}/mo (${i.department})`);
+      const uniqueItems = Array.from(uniqueVendors.values());
+      const total = uniqueItems.reduce((s, i) => s + (Number(i.monthly_cost) || 0), 0);
+      lines.push(`## ${label} — ${uniqueItems.length} tools, $${total.toFixed(0)}/mo combined`, "");
+      for (const i of uniqueItems) lines.push(`- ${i.vendor}: $${i.monthly_cost}/mo (${i.department})`);
       lines.push("");
     }
   }
 
-  if (!overlapCount) lines.push("No category has more than one active vendor.");
+  if (!overlapCount) lines.push("No category has more than one distinct active vendor.");
 
   await writeFile("saas-overlap-report.md", lines.join("\n") + "\n", "utf8");
   console.log(`${overlapCount} categor${overlapCount === 1 ? "y" : "ies"} with potential overlap.`);
